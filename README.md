@@ -1,72 +1,113 @@
-# TG-Radar-Plugins v6.0.0
+<div align="center">
 
-TG-Radar 插件仓库，采用全解耦插件化架构。
+# TG-Radar Plugins
+
+**全解耦插件仓库**
+
+每个插件独立运行 · 热重载 · 独立配置 · 独立日志
+
+</div>
+
+---
 
 ## 插件列表
 
-### Admin 插件（命令交互）
+### Admin 插件
 
-| 插件 | 说明 | 命令 |
-|------|------|------|
-| `general` | 通用面板与日志 | `ping` `status` `version` `config` `log` `jobs` |
-| `folders` | 分组查看与启停 | `folders` `rules` `enable` `disable` |
-| `rules` | 规则维护与通知 | `addrule` `setrule` `delrule` `setnotify` `setalert` `setprefix` |
-| `routes` | 自动归纳与同步 | `routes` `addroute` `delroute` `sync` `routescan` |
-| `system` | 系统重启与更新 | `restart` `update` |
+| 插件 | 命令 | 配置 | 说明 |
+|:-----|:-----|:-----|:-----|
+| **general** | ping status version config log jobs | `panel_auto_delete_seconds` `recycle_command_seconds` | 通用面板 |
+| **folders** | folders rules enable disable | — | 分组管理 |
+| **rules** | addrule setrule delrule setnotify setalert setprefix | — | 规则维护 |
+| **routes** | routes addroute delroute sync routescan | `auto_sync_enabled` `auto_sync_time` `auto_route_enabled` `auto_route_time` | 自动归纳 |
+| **system** | restart update | `restart_delay_seconds` | 系统任务 |
+| **chatinfo** | *(转发自动触发)* | — | 群 ID 识别 · 分组变动实时同步 |
 
-### Core 插件（消息处理）
+### Core 插件
 
-| 插件 | 说明 |
-|------|------|
-| `keyword_monitor` | 关键词监控与告警发送 |
+| 插件 | 配置 | 说明 |
+|:-----|:-----|:-----|
+| **keyword_monitor** | `bot_filter` `max_preview_length` | 关键词监控与告警 |
+
+---
 
 ## 开发新插件
 
-1. 复制 `plugin_template.py` 到 `plugins/admin/` 或 `plugins/core/`
-2. 填写 `PLUGIN_META` 元数据
-3. 实现 `setup(ctx)` 注册命令或钩子
-4. 实现 `teardown(ctx)` 做清理（可选）
-5. 在 Telegram 发送 `-reload 插件名` 热加载
-
-## 插件管理命令
-
 ```
--plugins              查看所有插件状态
--pluginreload         全量重载所有插件
--reload <名称>        重载单个插件
--pluginenable <名称>  启用已停用的插件
--plugindisable <名称> 停用插件（重启保持停用）
--pluginconfig <名称>  查看/修改插件配置
+1. 复制 plugin_template.py → plugins/admin/my_plugin.py
+2. 填写 PLUGIN_META
+3. 实现 setup(ctx: PluginContext)
+4. 发送 -reload my_plugin 热加载
 ```
 
-## 插件生命周期
-
-```
-[发现] → load → [已加载] → enable → [运行中]
-                                       ↓
-                               连续失败 N 次
-                                       ↓
-                                    [已熔断] → fix+reload → [运行中]
-                                       ↓
-                                   disable
-                                       ↓
-                                    [已停用] ← plugindisable
-```
-
-## PLUGIN_META 完整字段
+### 最小示例
 
 ```python
-PLUGIN_META = {
-    "name": "my_plugin",           # 插件名
-    "version": "1.0.0",            # 版本号
-    "description": "功能说明",      # 描述
-    "author": "作者",               # 作者
-    "kind": "admin",               # admin 或 core
-    "depends": [],                  # 依赖插件列表
-    "conflicts": [],                # 冲突插件列表
-    "min_core_version": "6.0.0",   # 最低核心版本
-    "config_schema": {              # 可配置项
-        "key": {"type": "bool", "default": True, "description": "说明"},
-    },
-}
+PLUGIN_META = {"name": "hello", "version": "1.0.0", "kind": "admin"}
+from tgr.plugin_sdk import PluginContext
+
+def setup(ctx: PluginContext):
+    @ctx.command("hello", summary="打招呼", usage="hello", category="示例")
+    async def _(app, event, args):
+        await ctx.reply(event, ctx.ui.panel("Hello", [ctx.ui.section("", ["👋"])]))
+```
+
+### SDK 接口
+
+```python
+from tgr.plugin_sdk import PluginContext
+
+def setup(ctx: PluginContext):
+    ctx.config.get(key)           # 读插件配置 (configs/name.json)
+    ctx.config.set(key, val)      # 写配置 (自动持久化)
+    ctx.db.list_folders()         # 白名单数据库方法
+    ctx.ui.panel(title, [...])    # HTML 渲染
+    ctx.bus.submit_job(kind, ...) # 提交后台任务
+    ctx.log.info("...")           # 插件独立日志
+    ctx.client                    # Telethon client
+    ctx.emit(event, data)         # 发布事件
+    ctx.reply(event, text)        # 统一回复
+
+    @ctx.command(name, ...)       # 注册命令
+    @ctx.hook(name, ...)          # 注册消息钩子
+    @ctx.on(event_name)           # 订阅事件
+    @ctx.cleanup                  # 卸载清理
+    @ctx.healthcheck              # 健康检查
+```
+
+---
+
+## 插件管理
+
+| 命令 | 功能 |
+|:-----|:-----|
+| `-plugins` | 查看所有插件状态 |
+| `-reload name` | 热重载单个插件 |
+| `-pluginreload` | 全量重载 |
+| `-pluginenable name` | 启用 |
+| `-plugindisable name` | 停用（持久化） |
+| `-pluginconfig name [k] [v]` | 查看/修改配置 |
+
+## 插件配置
+
+每个插件的配置自动生成在 `configs/` 目录：
+
+```
+configs/
+├── general.json           {"panel_auto_delete_seconds": 45, ...}
+├── routes.json            {"auto_sync_enabled": true, "auto_sync_time": "03:40", ...}
+├── keyword_monitor.json   {"bot_filter": true, "max_preview_length": 760}
+└── system.json            {"restart_delay_seconds": 2.0}
+```
+
+---
+
+## 生命周期
+
+```
+发现 → 加载 → 运行中 ←→ 停用
+                ↓
+         连续失败 N 次
+                ↓
+             熔断 → reload → 运行中
 ```

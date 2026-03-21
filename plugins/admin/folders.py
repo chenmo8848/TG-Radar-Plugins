@@ -1,81 +1,43 @@
-PLUGIN_META = {
-    "name": "folders",
-    "version": "6.0.0",
-    "description": "TR 管理器分组查看与启停插件",
-    "author": "TG-Radar",
-    "kind": "admin",
-}
+PLUGIN_META = {"name": "folders", "version": "6.0.0", "description": "分组管理与启停", "kind": "admin"}
+from tgr.plugin_sdk import PluginContext
 
-from tgr.telegram_utils import bullet, escape, html_code, panel, section
+def setup(ctx: PluginContext):
+    ui = ctx.ui
 
+    @ctx.command("folders", summary="查看全部分组", usage="folders", category="分组")
+    async def _(app, event, args):
+        rows = ctx.db.list_folders()
+        if not rows: return await ctx.reply(event, ui.panel("TG-Radar · 分组", [ui.section("状态", ["<i>暂无分组，请先执行 sync</i>"])]), prefer_edit=False)
+        cc, rc = ctx.db.count_cache_all_folders(), ctx.db.count_rules_all_folders()
+        blocks = [f"{'🟢' if int(r['enabled']) else '⚪'} <b>{ui.escape(r['folder_name'])}</b>  {'开启' if int(r['enabled']) else '关闭'}  群 <code>{cc.get(r['folder_name'],0)}</code>  规则 <code>{rc.get(r['folder_name'],0)}</code>" for r in rows]
+        await ctx.reply(event, ui.panel("TG-Radar · 分组总览", [ui.section("分组列表", blocks)]), auto_delete=75, prefer_edit=False)
 
-async def cmd_folders(app, event, args):
-    rows = app.db.list_folders()
-    if not rows:
-        await app.safe_reply(event, panel("TR 管理器 · 分组总览", [section("当前状态", ["· <i>系统里还没有任何分组记录。先执行一次同步，或先在 Telegram 侧创建分组。</i>"])]), prefer_edit=False)
-        return
-    cache_counts = app.db.count_cache_all_folders()
-    rule_counts = app.db.count_rules_all_folders()
-    blocks = []
-    for row in rows:
-        fn = row["folder_name"]
-        gc = cache_counts.get(fn, 0)
-        rc = rule_counts.get(fn, 0)
-        icon = "🟢" if int(row["enabled"]) == 1 else "⚪"
-        blocks.append(f"{icon} <b>{escape(fn)}</b>\n· 监听：{html_code('开启' if int(row['enabled']) == 1 else '关闭')}\n· 群组：{html_code(gc)}\n· 规则：{html_code(rc)}")
-    await app.safe_reply(event, panel("TR 管理器 · 分组总览", [section("当前分组", blocks)]), auto_delete=max(75, app.config.panel_auto_delete_seconds), prefer_edit=False)
+    @ctx.command("rules", summary="查看分组规则", usage="rules 分组名", category="分组")
+    async def _(app, event, args):
+        if not args: return await ctx.reply(event, ui.panel("TG-Radar · 参数不足", [ui.section("用法", [f"<code>{app.config.cmd_prefix}rules 分组名</code>"])]), prefer_edit=False)
+        f = app.find_folder(args)
+        if not f: return await ctx.reply(event, ui.panel("TG-Radar · 找不到分组", []), prefer_edit=False)
+        rows = ctx.db.get_rules_for_folder(f)
+        if not rows: return await ctx.reply(event, ui.panel(f"TG-Radar · {f}", [ui.section("规则", ["<i>暂无规则</i>"])]), prefer_edit=False)
+        blocks = [f"<b>{ui.escape(r['rule_name'])}</b>  <code>{ui.escape(r['pattern'])}</code>" for r in rows]
+        await ctx.reply(event, ui.panel(f"TG-Radar · {f} 规则", [ui.section("已启用", blocks)]), auto_delete=80, prefer_edit=False)
 
+    @ctx.command("enable", summary="开启分组监控", usage="enable 分组名", category="分组")
+    async def _(app, event, args):
+        if not args: return await ctx.reply(event, ui.panel("TG-Radar · 参数不足", []), prefer_edit=False)
+        f = app.find_folder(args)
+        if not f: return await ctx.reply(event, ui.panel("TG-Radar · 找不到分组", []), prefer_edit=False)
+        ctx.db.set_folder_enabled(f, True); app.queue_snapshot_flush(); app.queue_core_reload("enable", f)
+        ctx.db.log_event("INFO", "ENABLE_FOLDER", f)
+        await ctx.emit("folder_changed", {"folder": f, "action": "enable"})
+        await ctx.reply(event, ui.panel("TG-Radar · 分组已开启", [ui.section("结果", [ui.bullet("分组", f), ui.bullet("状态", "已开启")])]), prefer_edit=False)
 
-async def cmd_rules(app, event, args):
-    if not args:
-        await app.safe_reply(event, panel("TR 管理器 · 缺少参数", [section("示例", [f"<code>{app.config.cmd_prefix}rules 示例分组</code>"])]), prefer_edit=False)
-        return
-    folder = app.find_folder(args)
-    if folder is None:
-        await app.safe_reply(event, panel("TR 管理器 · 找不到该分组", [section("提示", [f"· 先发送 <code>{app.config.cmd_prefix}folders</code> 查看系统已识别的分组。"])]), prefer_edit=False)
-        return
-    rows = app.db.get_rules_for_folder(folder)
-    if not rows:
-        await app.safe_reply(event, panel(f"TR 管理器 · {folder} 的规则面板", [section("当前状态", ["· <i>该分组还没有任何启用中的规则。</i>"])]), prefer_edit=False)
-        return
-    blocks = []
-    for row in rows:
-        blocks.append(f"<b>{escape(row['rule_name'])}</b>\n· 表达式：<code>{escape(row['pattern'])}</code>\n· 更新时间：<code>{escape(row['updated_at'])}</code>")
-    await app.safe_reply(event, panel(f"TR 管理器 · {folder} 的规则面板", [section("已启用规则", blocks)]), auto_delete=max(80, app.config.panel_auto_delete_seconds), prefer_edit=False)
-
-
-async def cmd_enable(app, event, args):
-    if not args:
-        await app.safe_reply(event, panel("TR 管理器 · 缺少参数", [section("示例", [f"<code>{app.config.cmd_prefix}enable 示例分组</code>"])]), prefer_edit=False)
-        return
-    folder = app.find_folder(args)
-    if folder is None:
-        await app.safe_reply(event, panel("TR 管理器 · 找不到该分组", [section("提示", [f"· 先发送 <code>{app.config.cmd_prefix}folders</code> 查看列表。"])]), prefer_edit=False)
-        return
-    app.db.set_folder_enabled(folder, True)
-    app.queue_snapshot_flush()
-    app.queue_core_reload("enable_folder", folder)
-    app.db.log_event("INFO", "ENABLE_FOLDER", folder)
-    await app.safe_reply(event, panel("TR 管理器 · 分组监控已开启", [section("当前动作", [bullet("分组", folder), bullet("状态", "开启")])], "<i>这项变更已直接通知 Core 立即重载，不再依赖短周期轮询。</i>"), prefer_edit=False)
-
-
-async def cmd_disable(app, event, args):
-    if not args:
-        await app.safe_reply(event, panel("TR 管理器 · 缺少参数", [section("示例", [f"<code>{app.config.cmd_prefix}disable 示例分组</code>"])]), prefer_edit=False)
-        return
-    folder = app.find_folder(args)
-    if folder is None:
-        await app.safe_reply(event, panel("TR 管理器 · 找不到该分组", [section("提示", [f"· 先发送 <code>{app.config.cmd_prefix}folders</code> 查看列表。"])]), prefer_edit=False)
-        return
-    app.db.set_folder_enabled(folder, False)
-    app.queue_snapshot_flush()
-    app.queue_core_reload("disable_folder", folder)
-    app.db.log_event("INFO", "DISABLE_FOLDER", folder)
-    await app.safe_reply(event, panel("TR 管理器 · 分组监控已关闭", [section("当前动作", [bullet("分组", folder), bullet("状态", "关闭")])], "<i>对应监听目标已通知 Core 立即重载，新的匹配范围会尽快生效。</i>"), prefer_edit=False)
-
-
-def setup(ctx):
-    ctx.register_command("folders", cmd_folders, summary="查看全部 Telegram 分组状态", usage="folders", category="分组管理")
-    ctx.register_command("rules", cmd_rules, summary="查看指定分组规则", usage="rules 分组名", category="分组管理")
-    ctx.register_command("enable", cmd_enable, summary="开启指定分组监控", usage="enable 分组名", category="分组管理")
-    ctx.register_command("disable", cmd_disable, summary="关闭指定分组监控", usage="disable 分组名", category="分组管理")
+    @ctx.command("disable", summary="关闭分组监控", usage="disable 分组名", category="分组")
+    async def _(app, event, args):
+        if not args: return await ctx.reply(event, ui.panel("TG-Radar · 参数不足", []), prefer_edit=False)
+        f = app.find_folder(args)
+        if not f: return await ctx.reply(event, ui.panel("TG-Radar · 找不到分组", []), prefer_edit=False)
+        ctx.db.set_folder_enabled(f, False); app.queue_snapshot_flush(); app.queue_core_reload("disable", f)
+        ctx.db.log_event("INFO", "DISABLE_FOLDER", f)
+        await ctx.emit("folder_changed", {"folder": f, "action": "disable"})
+        await ctx.reply(event, ui.panel("TG-Radar · 分组已关闭", [ui.section("结果", [ui.bullet("分组", f), ui.bullet("状态", "已关闭")])]), prefer_edit=False)
