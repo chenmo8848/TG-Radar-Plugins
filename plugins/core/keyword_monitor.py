@@ -11,7 +11,7 @@ def setup(ctx: PluginContext):
 
     @ctx.hook("keyword_monitor", summary="监听群组消息并发送告警", order=100)
     async def on_message(app, event):
-        state = app.state
+        state = getattr(app, "state", None)
         if state is None:
             return
 
