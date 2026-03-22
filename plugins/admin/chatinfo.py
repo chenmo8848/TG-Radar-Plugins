@@ -10,6 +10,13 @@ def setup(ctx: PluginContext):
 
     @ctx.hook("chatinfo_forward", summary="检测转发消息提取来源群 ID", order=10)
     async def on_forward(app, event):
+        # 只在收藏夹中触发
+        if not event.is_private:
+            return
+        self_id = getattr(app, "self_id", 0)
+        if self_id and int(getattr(event, "chat_id", 0) or 0) != self_id:
+            return
+
         fwd = getattr(event, "fwd_from", None) or getattr(getattr(event, "message", None), "fwd_from", None)
         if fwd is None:
             return
