@@ -8,8 +8,6 @@ from tgr.plugin_sdk import PluginContext
 def setup(ctx: PluginContext):
     ui, log = ctx.ui, ctx.log
 
-    # ── 转发消息自动提取群 ID ──
-    # 直接注册到 Telethon client，不通过 hook 机制
     _forward_handler_ref = None
     _filter_handler_ref = None
 
@@ -34,16 +32,13 @@ def setup(ctx: PluginContext):
 
         @client.on(tl_events.NewMessage(chats=self_id, incoming=True, outgoing=True))
         async def _on_saved_message(event):
-            """捕获收藏夹中的所有消息，检测转发来源。"""
             try:
-                # 跳过命令消息
                 text = (event.raw_text or "").strip()
                 prefix = getattr(ctx.app, "config", None)
                 cmd_prefix = getattr(prefix, "cmd_prefix", "-") if prefix else "-"
                 if text.startswith(cmd_prefix):
                     return
 
-                # 检查是否是转发消息
                 msg = event.message
                 fwd = getattr(msg, "fwd_from", None) if msg else None
                 if fwd is None:
@@ -61,7 +56,6 @@ def setup(ctx: PluginContext):
                     except Exception as exc:
                         log.warning("from_id 解析失败: %s", exc)
 
-                # 有些频道转发只有 from_name 没有 from_id
                 if source_id is None:
                     from_name = getattr(fwd, "from_name", None)
                     if from_name:
@@ -78,7 +72,6 @@ def setup(ctx: PluginContext):
                         log.info("转发消息无 from_id 也无 from_name")
                     return
 
-                # 获取来源详情
                 title = "未知"
                 stype = "未知"
                 try:
@@ -121,7 +114,6 @@ def setup(ctx: PluginContext):
         _forward_handler_ref = _on_saved_message
         log.info("转发检测 handler 已注册")
 
-        # ── 分组变动实时同步 ──
         async def _on_filter_update(event):
             update = getattr(event, "update", event)
             utype = type(update).__name__
@@ -164,11 +156,12 @@ def setup(ctx: PluginContext):
                 _filter_handler_ref = None
         log.info("handler 已注销")
 
-    # 延迟注册（等 client 完全连接）
     import asyncio
+
     async def _delayed():
         await asyncio.sleep(2)
         await _setup_handlers()
+
     try:
         asyncio.get_running_loop().create_task(_delayed())
     except RuntimeError:
