@@ -15,7 +15,7 @@
 
 <br/>
 
-[🏠 **核心仓库 →**](https://github.com/chenmo8848/TG-Radar) · [**快速开发**](#-快速开发) · [**SDK 接口**](#-sdk-接口) · [**插件管理**](#-插件管理)
+[🏠 **核心仓库 →**](https://github.com/x72dev/TG-Radar) · [**快速开发**](#-快速开发) · [**SDK 接口**](#-sdk-接口) · [**插件管理**](#-插件管理)
 
 </div>
 
@@ -156,7 +156,7 @@ configs/
 
 <div align="center">
 
-[**Core**](https://github.com/chenmo8848/TG-Radar) · [**Plugins**](https://github.com/chenmo8848/TG-Radar-Plugins)
+[**Core**](https://github.com/x72dev/TG-Radar) · [**Plugins**](https://github.com/x72dev/TG-Radar-Plugins)
 
 <sub>Built with Telethon · SQLite WAL · APScheduler</sub>
 
