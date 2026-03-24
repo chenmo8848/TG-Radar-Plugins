@@ -8,10 +8,10 @@
 
 <br/>
 
-[![Plugins](https://img.shields.io/badge/7-3fb950?style=flat-square&label=plugins)]()&nbsp;
-[![SDK](https://img.shields.io/badge/PluginContext-58a6ff?style=flat-square&label=SDK)]()&nbsp;
-[![Hot Reload](https://img.shields.io/badge/✓-3fb950?style=flat-square&label=hot%20reload)]()&nbsp;
-[![Auto Fuse](https://img.shields.io/badge/✓-3fb950?style=flat-square&label=auto%20fuse)]()
+[![Plugins](https://img.shields.io/badge/7-3fb950?style=flat-square&label=plugins)](#-插件列表)&nbsp;
+[![SDK](https://img.shields.io/badge/PluginContext-58a6ff?style=flat-square&label=SDK)](#-sdk-接口)&nbsp;
+[![Hot Reload](https://img.shields.io/badge/✓-3fb950?style=flat-square&label=hot%20reload)](#-插件管理)&nbsp;
+[![Auto Fuse](https://img.shields.io/badge/✓-3fb950?style=flat-square&label=auto%20fuse)](#%EF%B8%8F-生命周期)
 
 <br/>
 
@@ -120,10 +120,21 @@ def setup(ctx: PluginContext):
 
 ## 📂 插件配置
 
+
 声明了 `config_schema` 的插件自动生成配置文件，也可直接编辑后 `-reload`：
 
+```json
+// configs/my_plugin.json 示例
+{
+  "api_endpoint": "https://api.example.com",
+  "retry_count": 3,
+  "allowed_users": [12345, 67890]
+}
 ```
+
+```text
 configs/
+
 ├── general.json           {"panel_auto_delete_seconds": 45, "recycle_command_seconds": 8}
 ├── routes.json            {"auto_sync_enabled": true, "auto_sync_time": "03:40", ...}
 ├── keyword_monitor.json   {"bot_filter": true, "max_preview_length": 760}
@@ -132,7 +143,18 @@ configs/
 
 ---
 
+
+## 🛠️ 插件调试最佳实践
+
+1. **查看日志**：如果插件出现语法错误或逻辑异常，可通过核心命令 `-log [插件名]` 查看错误堆栈，或者直接在宿主机查看 `TG-Radar/runtime/logs/` 目录下的对应日志文件。
+2. **避免阻塞**：由于 Telethon 是异步框架，**请勿在 handler 中执行长时间的阻塞操作**（如大文件下载、同步的网络请求 `requests.get` 等）。这会导致整个机器人的事件循环卡死。
+   - 解决方案：使用 `aiohttp` 进行异步请求，或者将耗时任务丢给后台队列：`ctx.bus.submit_job("kind", func, *args)`。
+3. **状态隔离**：请尽量避免在插件模块层级使用全局变量保存可变状态，建议利用 `ctx.config` 或 `ctx.db` 进行状态持久化，以确保 `-reload` 后状态不会丢失。
+
+---
+
 ## ♻️ 生命周期
+
 
 ```
   ┌──────┐   setup() 成功   ┌────────┐   连续失败 N 次   ┌──────┐
