@@ -2,8 +2,6 @@
 
 <img src="docs/banner.svg" alt="TG-Radar Plugins Banner" width="100%" style="max-width: 800px; margin-bottom: 20px;" />
 
-# 📦 TG-Radar Plugins
-
 **TG-Radar 官方扩展生态与沙盒插件注册中心**
 
 [![Plugins](https://img.shields.io/badge/Official_Plugins-5+-3FB950?style=for-the-badge&logo=codeigniter&logoColor=white)](#-内置组件概览)
